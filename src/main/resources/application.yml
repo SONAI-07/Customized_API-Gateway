@@ -1,2 +1,21 @@
-spring.application.name=API Gateway
-spring.data.mongodb.auto-index-creation=true
+spring:
+  profiles:
+    active: dev          # remove this line in production!
+  cloud:
+    gateway:
+    # (your existing routes go here - Missing #4)
+
+gateway:
+  auth:
+    # MUST be at least 32 characters for HS256. Change this!
+    secret: "hackathon-super-secret-key-0123456789abcdef"
+    token-ttl-minutes: 60
+    public-paths:
+      - /auth/**
+      - /actuator/health
+  registry:
+    token: "internal-registry-token-change-me"
+
+ratelimit:
+  capacity: 60
+  refill-rate: 1
