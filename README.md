@@ -2,149 +2,180 @@
 
 # ⚡ Hyper-Reactive API Gateway
 
-### A Zero-Dependency, Self-Healing API Gateway with a Built-In Service Registry & Smart Load Balancer
+**Service discovery, self-healing eviction, smart load balancing, edge rate-limiting, a JWT trust boundary and a live ops dashboard — in one zero-infrastructure JAR.**
 
-*Enterprise-grade traffic routing — without the enterprise infrastructure bill.*
+*Built for hackathon teams and bootstrapped startups. Honest about what it is — and what it isn't.*
+
+![Java](https://img.shields.io/badge/Java-21-orange) ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1-green) ![Gateway](https://img.shields.io/badge/Spring%20Cloud%20Gateway-WebFlux-blue) ![Docker](https://img.shields.io/badge/Docker-ready-2496ED) ![License](https://img.shields.io/badge/license-MIT-lightgrey)
 
 </div>
 
----
-
-## 🎯 The 30-Second Pitch
-
-Every company running microservices — Netflix, Uber, Amazon — needs a "traffic cop" that knows which servers are alive and routes users to the healthiest one. Normally, that requires bolting on expensive, heavyweight third-party infrastructure (Netflix Eureka, HashiCorp Consul) just to answer one question: *"who's online right now?"*
-
-**This project answers that question in-house**, with zero external dependencies, sub-second failure detection, and traffic-routing math borrowed from the same engineering playbook used inside Netty and Akka — two of the systems that power a large chunk of the internet's backend traffic today.
-
-It's not a toy CRUD app. It's core distributed-systems infrastructure — the kind of component that determines whether a startup's product survives its first traffic spike.
+<!-- Replace with your dashboard screenshot before publishing -->
+![Live dashboard](docs/dashboard.png)
 
 ---
 
-## 💡 Why This Matters for a Startup
+## The 30-Second Pitch
 
-| Problem Most Startups Hit | How This Gateway Solves It |
-|---|---|
-| Paying for (or self-hosting) Consul/Eureka just for service discovery | **Built-in registry** — no extra services, no extra infra cost |
-| One server gets slammed while another sits idle (default "round robin" routing) | **Least-Connections routing** — always sends traffic to the least-busy server |
-| Crashed servers keep receiving traffic until someone notices | **Self-healing in real time** — dead instances are evicted automatically within seconds |
-| Monitoring 1,000s of servers for crashes tanks CPU performance | **O(1) eviction**, regardless of whether you're running 10 servers or 60,000 |
-| Engineers spend weeks wiring up off-the-shelf infra before writing product code | **One Spring Boot service, `mvn spring-boot:run`, and you're routing traffic** |
+Every microservices project needs a traffic cop that answers four questions: *who is alive, who is least busy, who is allowed in, and who is sending too much?* The default answer is renting heavyweight infrastructure — Eureka, Consul, Kong, Zuul — before you've written a line of product code.
 
-In short: this is the kind of unglamorous, foundational infrastructure that most engineers *use* but very few know how to *build*. Building it from scratch demonstrates the ability to make sound architectural calls under real constraints — exactly what a small, fast-moving founding team needs from an early engineering hire.
+This gateway answers all four **in-house, with zero external dependencies**:
 
----
-
-## 🏗️ How It Works (In Plain English, With the Technical Depth Underneath)
-
-### 1. The Embedded Registry — "No External Dependencies"
-Instead of asking another company's server "who's online?", the Gateway keeps its own real-time, thread-safe map of every active microservice in memory. Services check in with a `/register` call and stay alive by sending a `/heartbeat` every few seconds — like a pulse check.
-
-**Under the hood:** a deeply nested, thread-safe `ConcurrentHashMap`, safe for thousands of simultaneous reads/writes without locking up the system.
-
-### 2. The "Grim Reaper" — O(1) Failure Detection at Any Scale
-This is the centerpiece of the project. When a server crashes and stops sending its pulse, it needs to be removed from rotation *immediately* — otherwise real users get routed to a dead server.
-
-The naive approach — checking every single server, every second, to see who's still alive — completely falls apart at scale. Check 60,000 servers every second, and you've built a CPU-melting bottleneck instead of a gateway.
-
-**The solution:** a custom-built **Hashed Wheel Timer** — the same algorithmic pattern that powers Netty and Akka, two of the most battle-tested networking frameworks in the industry.
-
-Think of it like a **60-slot Ferris wheel**. Every heartbeat books a seat a few seconds into the future. A single background thread rotates the wheel forward one slot per second, and only evicts the handful of services scheduled for *that exact* slot — never scanning the whole list.
-
-> **The result:** dead-server detection that costs the same, whether you have 10 microservices or 60,000. That's the difference between infrastructure that scales with a startup and infrastructure that becomes next year's rewrite project.
-
-### 3. Smart Load Balancing — Not All Servers Are Equal
-Most default gateway setups split traffic 50/50 across servers ("Round Robin") — which is fine until you have one big server next to a smaller one, and the small one falls over.
-
-This Gateway makes routing decisions using **live data**, not blind guesses:
-- **Least Connections** — routes each new user to whichever server is currently doing the least work
-- **Weighted Round Robin** — understands that a bigger server can handle proportionally more traffic than a smaller one
-
-### 4. A Bridge Into the Industry-Standard Ecosystem
-Rather than reinventing everything, the custom registry plugs directly into Spring Cloud's standard interfaces — meaning it's a drop-in replacement for expensive off-the-shelf tools, not a walled-off science project.
+- 🧠 **Built-in service registry** — services self-register over REST. No Eureka/Consul bill.
+- ⏱️ **O(1) self-healing** — a hierarchical timing wheel evicts silent instances in seconds, whether you run 10 instances or 60,000.
+- ⚖️ **Least-active-connections load balancing** — traffic follows live telemetry, not round-robin guesses.
+- 🚦 **Token-bucket rate limiting at the edge** — per-API-key buckets with continuous refill; spam dies before it costs you CPU.
+- 🔐 **JWT trust boundary** — tokens validated once at the edge; downstream services ship **zero security code**.
+- 📊 **Ops dashboard compiled into the JAR** — a React/TypeScript dashboard served by the gateway itself, plus Prometheus-ready metrics.
+- 🐳 **Hackathon-grade DX** — `docker compose up` → dashboard live → drop one SDK file per service → demo.
 
 ---
 
-## 🧠 System Architecture
+## Why This Exists — And Why It Is *Not* Kong or Zuul
 
-```mermaid
-flowchart TB
-    Client["📱 Mobile / Web Client"]
-    Gateway["🚪 API Gateway<br/>(Netty · Non-blocking Ingestion)"]
-    LB["⚖️ Custom Load Balancer<br/>(Least Connections Math)"]
-    Discovery["🔍 Custom Discovery Client"]
-    Registry["🗂️ Embedded Registry<br/>(Thread-safe ConcurrentHashMap)"]
-    Timer["⏱️ Hashed Wheel Timer<br/>(O(1) Eviction — 'The Grim Reaper')"]
-    Services["🖥️ Downstream Microservices"]
-    Winner["✅ Winning Instance<br/>e.g. 192.168.1.5:8081"]
+**What this is:** a single-JAR traffic cop for your first 1–15 services; a hackathon accelerator; and a readable, from-scratch implementation of the patterns big gateways hide behind you (timing wheels, token buckets, trust boundaries, reactive filter chains).
 
-    Client -->|HTTP Request| Gateway
-    Gateway --> LB
-    LB -->|Needs live IPs| Discovery
-    Discovery -->|Pulls data| Registry
-    Services -->|/register| Registry
-    Services -->|/heartbeat| Timer
-    Timer -->|Evicts dead instances| Registry
-    LB -->|Routes to healthiest server| Winner
+**What this is not:** a Kong/Zuul replacement. There is no plugin marketplace, no DB-backed admin API, no multi-tenant policy engine, no battle-hardened TLS/HTTP2 edge tuning — and by design, there shouldn't be. Kong is a highway system. This is the smart traffic light your first product actually needs.
+
+> **The graduation rule:** when your fleet outgrows one gateway node, this project has done its job — because by then you'll know *exactly* why the bigger tools exist.
+
+---
+
+## Request Lifecycle
+
+```
+client ─▶ ① CORS ─▶ ② Registry Guard ─▶ ③ Token-Bucket Limiter ─▶ ④ JWT Trust Boundary
+             (preflight)   (X-Registry-Token)   (429 when bucket empty)  (strips spoofed headers,
+                                                                          injects X-User-Id/Role)
+                                                │ accepted
+                                                ▼
+                          ⑤ Route match — YAML predicates, or zero-config
+                             auto-discovery (/<service-name>/**)
+                                                ▼
+                          ⑥ CustomDiscoveryClient → in-memory registry
+                                                ▼
+                          ⑦ CustomLoadBalancer → least active connections
+                                                ▼
+                          ⑧ ConnectionTracker (+1 conn) ─▶ Netty ─▶ your microservice
+                                                │
+                          ⑨ response ◀──────────┘  (−1 conn)
+
+background:  timing wheel ticks 1×/sec → 90s of silence → O(1) eviction
+             dashboard polls /gateway/observability/summary every 3s
 ```
 
 ---
 
-## 🛠️ Tech Stack & Concepts Demonstrated
+## Quickstart
 
-| Category | Details |
-|---|---|
-| **Language** | Java 17 / 21 |
-| **Framework** | Spring Boot 3.x, Spring Cloud Gateway |
-| **Reactive Programming** | Project Reactor (`Mono` / `Flux`), fully non-blocking I/O |
-| **Concurrency** | `ConcurrentHashMap`, `AtomicInteger`, volatile fields, thread-safe queues |
-| **Algorithmic Design** | Hashed Wheel Timers, lazy cancellation, modulo-based time scheduling |
-| **Systems Thinking** | Built to replace infrastructure most teams pay for or self-host |
-
----
-
-## 🚀 Getting Started
-
-### Prerequisites
-- Java 17+
-- Maven
-
-### Installation
-
+### Option A — Docker (recommended)
 ```bash
-# Clone the repository
-git clone https://github.com/SONAI-07/Hyper-Reactive-API-Gateway.git
+git clone https://github.com/SONAI-07/Customized_API-Gateway.git && cd Customized_API-Gateway
+docker compose up --build
+```
+| Surface | URL |
+|---|---|
+| Gateway + live dashboard | http://localhost:8080/dashboard/ |
+| Prometheus | http://localhost:9090 |
+| Grafana | http://localhost:3000 *(admin/admin)* |
 
-# Build the project
-mvn clean install
-
-# Run the Gateway
+### Option B — From source (pure-Java experience)
+```bash
 mvn spring-boot:run
 ```
+The `frontend-maven-plugin` downloads Node, builds the React dashboard and embeds it into the JAR — one command, no npm knowledge required.
 
-### Try It Yourself — Register a Mock Service
+### Use it in your project — 4 steps
+1. **Run the gateway** (above).
+2. **Register each service** — drop [`client-sdk/GatewayAutoRegistrar.java`](client-sdk/GatewayAutoRegistrar.java) into any Spring Boot service and add `@EnableScheduling`. Or register manually:
+   ```bash
+   curl -X POST http://localhost:8080/registry/register \
+     -H "Content-Type: application/json" -H "X-Registry-Token: <your-token>" \
+     -d '{"serviceName":"ORDER-SERVICE","instanceID":"order-1","host":"127.0.0.1","port":8081,"weight":1}'
+   ```
+3. **Route traffic** — zero-config: every registered service is instantly reachable at `/<service-name>/**`. For clean public URLs, add predicates:
+   ```yaml
+   spring.cloud.gateway.routes:
+     - id: orders
+       uri: lb://ORDER-SERVICE          # "lb://" → your custom load balancer
+       predicates: [Path=/api/orders/**]
+       filters: [StripPrefix=2]
+   ```
+4. **Authenticate users** — issue HS256 JWTs with the gateway's secret (dev shortcut: `GET /auth/dev-token?userId=alice&role=ADMIN`). Clients send `Authorization: Bearer …`; your services simply read `X-User-Id` and `X-User-Role`. No security libraries downstream. Ever.
 
-```bash
-curl -X POST http://localhost:8080/register \
--H "Content-Type: application/json" \
--d '{
-  "serviceId": "order-service",
-  "instanceId": "order-service-node-1",
-  "host": "127.0.0.1",
-  "port": 8081,
-  "weight": 5,
-  "activeConnections": 12
-}'
+---
+
+## Observability, Built In
+
+`GET /gateway/observability/summary` returns live totals (received / accepted / blocked-by-reason), per-service instance counts, active connections and the **busiest instance per service**. The embedded dashboard visualizes it in real time; `/actuator/prometheus` feeds Prometheus/Grafana for history and alerting.
+
+---
+
+## Design Tradeoffs (Read Before Production)
+
+| Decision | Why | When you'll outgrow it |
+|---|---|---|
+| In-memory registry & rate-limit state | Zero infra, nanosecond reads | Multiple gateway replicas → move state to Redis |
+| Volatile state (restart wipes registry) | SDK heartbeats re-register services in <30s | Cold-start-critical fleets → add snapshot persistence |
+| HS256 shared-secret JWTs | One secret, zero key infrastructure | Org-wide SSO / cross-team issuance → RS256 + JWKS |
+| Timing-wheel eviction (90s) over active probes | O(1), zero probe traffic | Sub-second failover needs → add active health probes |
+| Dashboard embedded in the JAR | Ships with the product; one artifact to deploy | Design-system-heavy ops consoles → standalone frontend |
+
+---
+
+## Scar Tissue — Bugs That Shaped the Architecture
+
+Every feature was curl-verified; every failure below was reproduced, root-caused and documented:
+
+- **`GlobalFilter` vs `WebFilter`** — gateway filters only run on *matched routes*; `@RestController`s silently bypass them. All edge guards are therefore `WebFilter`s.
+- **Bean-name collision** with Resilience4j's internal `rateLimiterRegistry` → renamed ours `TokenBucketRegistry`.
+- **Spring Framework 7 relocation** of `PathContainer` → switched to the decade-stable `AntPathMatcher`.
+- **Micrometer's `registry.get()` throws** on meters never recorded → `registry.find()`.
+- **CORS preflight trap** — `OPTIONS` requests must skip every guard, or browsers fail silently.
+- **Jackson vs Lombok** all-args constructors → dedicated `RegistrationRequest` DTO that also blocks clients from spoofing internal fields.
+
+---
+
+## Repository Layout
+
+```
+src/main/java/com/apiGateway/
+├── registry/        # in-memory registry, REST API, timing-wheel eviction
+├── discovery/       # ReactiveDiscoveryClient bridge
+├── loadbalancer/    # least-active-connections LB + connection tracker
+├── ratelimiter/     # token bucket + idle-bucket garbage collection
+├── security/        # JWT trust boundary, registry guard, dev tokens
+├── observability/   # Micrometer meters + summary endpoint
+└── config/          # CORS, security chain, dashboard routing
+dashboard/           # React + TypeScript ops dashboard (compiled into the JAR)
+client-sdk/          # drop-in auto-registrar for your microservices
+observability/       # prometheus.yml + docker-compose for the metrics stack
 ```
 
-> ⚠️ Hit `/heartbeat` within 90 seconds — or the Hashed Wheel Timer will evict your service, right on schedule.
+## Roadmap
+
+- [ ] `gateway-client-spring-boot-starter` — SDK as a one-line Maven dependency
+- [ ] Redis-backed shared state for multi-replica gateways
+- [ ] RS256 / JWKS support and per-route role policies
+- [ ] Per-route circuit breaking (Resilience4j already on the classpath)
+- [ ] Pre-provisioned Grafana dashboard JSON
+- [ ] Registry snapshotting across restarts
 
 ---
 
-## 🔮 Roadmap
+## 📖 The Full Build Log
 
-- [ ] **Global Pre-Filters** — JWT authentication, blocking unauthorized traffic before it hits the load balancer
-- [ ] **Global Post-Filters** — centralized latency logging and sensitive header stripping
-- [ ] **Circuit Breaking** — Resilience4J integration to short-circuit requests when a downstream service degrades
+Every feature above has a written post-mortem: requirement → tradeoff → implementation → failure → fix.
+**[Read the complete engineering journey on Medium →](https://medium.com/@your-handle)** *(link at publish time)*
+
+*Built in an AI-paired engineering workflow: every design decision argued, every bug reproduced with curl, every fix verified against the live dashboard. The article shows the reasoning chain — not just the result.*
 
 ---
 
+<div align="center">
+
+**If this saved your hackathon weekend, give it a ⭐ — and ship something people use.**
+
+MIT License · Built by [SONAI-07](https://github.com/SONAI-07)
+
+</div>
