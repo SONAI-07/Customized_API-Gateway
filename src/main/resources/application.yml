@@ -36,7 +36,7 @@ gateway:
     secret: "hackathon-super-secret-key-0123456789abcdef"
     token-ttl-minutes: 60
     # Comma-separated public paths
-    public-paths: "/auth/**, /actuator/health"
+    public-paths:  "/auth/**, /actuator/**, /gateway/observability/**, /dashboard/**, /registry/**"
   registry:
     token: "internal-registry-token-change-me"
 

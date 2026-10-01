@@ -33,12 +33,14 @@ public class ObservabilityController {
     }
 
     private double count(String name) {
-        return registry.get(name).counters().stream().mapToDouble(Counter::count).sum();
+        // FIX: Use .find() instead of .get() to avoid MeterNotFoundException on fresh boots
+        return registry.find(name).counters().stream().mapToDouble(Counter::count).sum();
     }
 
     private Map<String, Double> blockedByReason() {
         Map<String, Double> blocked = new LinkedHashMap<>();
-        registry.get("gateway.requests.blocked").counters()
+        // FIX: Use .find() instead of .get()
+        registry.find("gateway.requests.blocked").counters()
                 .forEach(c -> blocked.merge(c.getId().getTag("reason"), c.count(), Double::sum));
         return blocked;
     }
@@ -51,12 +53,15 @@ public class ObservabilityController {
             ServiceInstance busiest = null;
 
             for (ServiceInstance i : inner.values()) {
-                instances.add(Map.of(
-                        "instanceID", i.getInstanceID(),
-                        "host", String.valueOf(i.getHost()),
-                        "port", i.getPort(),
-                        "activeConnections", i.getActiveConnections().get()));
-                if (busiest == null || i.getActiveConnections().get() > busiest.getActiveConnections().get()) {
+                Map<String, Object> instMap = new LinkedHashMap<>();
+                instMap.put("instanceID", i.getInstanceID());
+                instMap.put("host", String.valueOf(i.getHost()));
+                instMap.put("port", i.getPort());
+                int conns = (i.getActiveConnections() != null) ? i.getActiveConnections().get() : 0;
+                instMap.put("activeConnections", conns);
+                instances.add(instMap);
+
+                if (busiest == null || conns > (busiest.getActiveConnections() != null ? busiest.getActiveConnections().get() : 0)) {
                     busiest = i;
                 }
             }
@@ -65,7 +70,7 @@ public class ObservabilityController {
             svc.put("instanceCount", inner.size());
             svc.put("instances", instances);
             svc.put("busiestInstance", busiest == null ? null : busiest.getInstanceID());
-            svc.put("busiestInstanceConnections", busiest == null ? 0 : busiest.getActiveConnections().get());
+            svc.put("busiestInstanceConnections", busiest == null || busiest.getActiveConnections() == null ? 0 : busiest.getActiveConnections().get());
             services.add(svc);
         });
         return services;

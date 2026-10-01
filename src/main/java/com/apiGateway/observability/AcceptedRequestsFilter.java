@@ -12,11 +12,17 @@ import reactor.core.publisher.Mono;
 @Order(1)
 public class AcceptedRequestsFilter implements WebFilter {
     private final GatewayMetrics metrics;
-    public AcceptedRequestsFilter(GatewayMetrics metrics) { this.metrics = metrics; }
+
+    public AcceptedRequestsFilter(GatewayMetrics metrics) {
+        this.metrics = metrics;
+    }
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
-        if (exchange.getRequest().getMethod() != HttpMethod.OPTIONS) {
+        String path = exchange.getRequest().getURI().getPath();
+        boolean isPreflight = exchange.getRequest().getMethod() == HttpMethod.OPTIONS;
+        boolean isInternal = path.startsWith("/actuator") || path.startsWith("/gateway/observability");
+        if (!isPreflight && !isInternal) {
             metrics.recordAccepted();
         }
         return chain.filter(exchange);
