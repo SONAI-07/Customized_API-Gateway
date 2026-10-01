@@ -10,6 +10,7 @@ import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.server.WebFilter;
 import org.springframework.web.server.WebFilterChain;
 import reactor.core.publisher.Mono;
+import com.apiGateway.observability.GatewayMetrics;
 
 import java.net.InetAddress;
 
@@ -19,8 +20,12 @@ public class RateLimitingFilter implements WebFilter {
 
     private final TokenBucketRegistry registry;
 
-    public RateLimitingFilter(TokenBucketRegistry registry) {
+    private final GatewayMetrics metrics;
+
+    public RateLimitingFilter(TokenBucketRegistry registry, GatewayMetrics metrics) {
+
         this.registry = registry;
+        this.metrics = metrics;
     }
 
     @Override
@@ -34,7 +39,9 @@ public class RateLimitingFilter implements WebFilter {
 
         if (apiKey != null && !apiKey.isBlank()) {
             identifier = apiKey;
-        } else {
+        }
+
+        else {
             InetAddress remoteAddress = exchange.getRequest().getRemoteAddress() != null
                     ? exchange.getRequest().getRemoteAddress().getAddress()
                     : null;
@@ -45,12 +52,15 @@ public class RateLimitingFilter implements WebFilter {
 
         if (bucket.tryConsume()) {
             return chain.filter(exchange);
-        } else {
+        }
+
+        else {
             long remaining = bucket.getAvailableTokens();
             exchange.getResponse().setStatusCode(HttpStatus.TOO_MANY_REQUESTS);
             exchange.getResponse().getHeaders().add("X-RateLimit-Limit", "60");
             exchange.getResponse().getHeaders().add("X-RateLimit-Remaining", String.valueOf(remaining));
             exchange.getResponse().getHeaders().add("Retry-After", "60");
+            metrics.recordBlocked("rate_limited");
             return exchange.getResponse().setComplete();
         }
     }

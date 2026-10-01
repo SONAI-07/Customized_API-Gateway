@@ -42,6 +42,7 @@ public class InstanceEviction {
     public void scheduleTimeout (ServiceInstance serviceInst , String instanceId, int delaySeconds) {
 
 
+
         int ticksToMove = delaySeconds;
 
         int newCartIndex = (currentTick + ticksToMove) % 60;
@@ -49,7 +50,7 @@ public class InstanceEviction {
         int rounds = ticksToMove / 60 ;
 
 
-        TimeoutTask newTask = new TimeoutTask(instanceId, rounds);
+        TimeoutTask newTask = new TimeoutTask(serviceInst.getServiceName(), instanceId, rounds);
 
         wheel[newCartIndex].add(newTask);
 
@@ -85,7 +86,7 @@ public class InstanceEviction {
 
               // It's not canceled, and rounds == 0.
               // EXECUTE THE EVICTION!
-              registerService.deleteInstance();
+              registerService.deleteInstance(task.getServiceName(), task.getInstanceID());
               cart.remove(task); // Remove from wheel
 
           }

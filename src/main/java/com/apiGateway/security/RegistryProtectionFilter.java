@@ -1,28 +1,38 @@
 package com.apiGateway.security;
 
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.cloud.gateway.filter.GatewayFilterChain;
-import org.springframework.cloud.gateway.filter.GlobalFilter;
-import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
+import org.springframework.web.server.WebFilter;
+import org.springframework.web.server.WebFilterChain;
 import reactor.core.publisher.Mono;
+import org.springframework.http.HttpMethod;
+import com.apiGateway.observability.GatewayMetrics;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 
 @Component
-public class RegistryProtectionFilter implements GlobalFilter, Ordered {
+@Order(-2) // Runs FIRST
+public class RegistryProtectionFilter implements WebFilter {
 
     private final byte[] registryTokenBytes;
+    private GatewayMetrics metrics;
 
-    public RegistryProtectionFilter(@Value("${gateway.registry.token:}") String registryToken) {
+    public RegistryProtectionFilter(@Value("${gateway.registry.token:}") String registryToken, GatewayMetrics metrics) {
         this.registryTokenBytes = registryToken.getBytes(StandardCharsets.UTF_8);
+        this.metrics = metrics;
     }
 
     @Override
-    public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+    public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
+
+        if (exchange.getRequest().getMethod() == HttpMethod.OPTIONS) {
+            return chain.filter(exchange);
+        }
+
         String path = exchange.getRequest().getURI().getPath();
         if (!path.startsWith("/registry")) {
             return chain.filter(exchange);
@@ -37,10 +47,5 @@ public class RegistryProtectionFilter implements GlobalFilter, Ordered {
             return exchange.getResponse().setComplete();
         }
         return chain.filter(exchange);
-    }
-
-    @Override
-    public int getOrder() {
-        return -2; // the very first guard
     }
 }

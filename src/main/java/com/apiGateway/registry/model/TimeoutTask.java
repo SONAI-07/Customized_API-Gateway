@@ -10,16 +10,16 @@ import lombok.*;
 public class TimeoutTask {
 
    private String instanceID ;
-
+   private String serviceName;
    private int remainingRounds ;
-
    public boolean isCancelled ;
 
 
 
-      public TimeoutTask(String instanceID, int remainingRounds ) {
+      public TimeoutTask(String serviceName,String instanceID, int remainingRounds ) {
         this.instanceID = instanceID;
         this.remainingRounds = remainingRounds;
+          this.serviceName = serviceName;
 
     }
 

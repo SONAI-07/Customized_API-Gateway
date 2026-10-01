@@ -4,6 +4,7 @@ import lombok.*;
 import reactor.core.publisher.Mono;
 
 import java.time.Instant;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Getter
 @Setter
@@ -27,10 +28,11 @@ public class ServiceInstance
 
     private int weight;
 
-    private int activeConnections;
-
-
+    private AtomicInteger activeConnections;
     private Instant lastHeartBeatTime;
 
+    public ServiceInstance() {
+        this.activeConnections = new AtomicInteger(0);
+    }
 
 }

@@ -57,10 +57,6 @@ public class RegisterService {
 
 
 
-
-
-
-
     //services update their existence
     //carts are assigned their respective indexes
 
@@ -122,12 +118,23 @@ public class RegisterService {
 
 
 
-    public void deleteInstance(){
-
-
-
+    public void deleteInstance(String serviceName, String instanceID) {
+        ConcurrentHashMap<String, ServiceInstance> innerMap = serviceFinder.get(serviceName);
+        if (innerMap == null) {
+            return;
+        }
+        ServiceInstance removed = innerMap.remove(instanceID);
+        if (removed != null) {
+            TimeoutTask staleTask = removed.getTimeoutReference();
+            if (staleTask != null) {
+                staleTask.isCancelled = true;   // cancel any pending eviction task for it
+            }
+            logger.warn("Instance {} removed from service {}", instanceID, serviceName);
+        }
+        if (innerMap.isEmpty()) {
+            serviceFinder.remove(serviceName);  // don't leave empty service shells behind
+        }
     }
-
 
 
 
