@@ -1,20 +1,45 @@
 spring:
   profiles:
-    active: dev          # remove this line in production!
-  cloud:
-    gateway:
-    # (your existing routes go here - Missing #4)
+    active: dev          #remove this line in production
+
+
+cloud:
+  gateway:
+    # MAGIC: Auto-creates routes for EVERY service in your Registry!
+    # If you register "ORDER-SERVICE", the gateway automatically
+    # exposes it at http://localhost:8080/ORDER-SERVICE/**
+    discovery:
+      locator:
+        enabled: true
+        lower-case-service-id: true
+
+    # Explicit custom routes for cleaner URLs
+    routes:
+      - id: order-service-custom-route
+        uri: lb://ORDER-SERVICE    # "lb://" tells it to use your CustomLoadBalancer!
+        predicates:
+          - Path=/api/orders/**
+        filters:
+          - StripPrefix=2          # Strips "/api/orders" before sending to microservice
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+
+
 
 gateway:
   auth:
     # MUST be at least 32 characters for HS256. Change this!
     secret: "hackathon-super-secret-key-0123456789abcdef"
     token-ttl-minutes: 60
-    public-paths:
-      - /auth/**
-      - /actuator/health
+    # Comma-separated public paths
+    public-paths: "/auth/**, /actuator/health"
   registry:
     token: "internal-registry-token-change-me"
+
 
 ratelimit:
   capacity: 60
