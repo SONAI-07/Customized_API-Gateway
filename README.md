@@ -66,6 +66,49 @@ background:  timing wheel ticks 1×/sec → 90s of silence → O(1) eviction
 
 ---
 
+---
+
+## 🏗️ System Design
+
+### High-Level Design (for people in a hurry)
+
+Three planes live inside one JVM, one JAR:
+
+| Plane | Question it answers | Key components |
+|---|---|---|
+| **Control** | *Who exists?* | `RegistryController`, `RegisterService`, hierarchical timing wheel |
+| **Data** | *Who gets this request?* | Edge WebFilters → route matcher → `CustomLoadBalancer` → Netty proxy |
+| **Observability** | *What is happening?* | Micrometer meters, `/gateway/observability/summary`, embedded React dashboard, Prometheus |
+
+```mermaid
+flowchart TB
+    WEB[Client / React app / curl] --> EDGE
+    subgraph GW ["Hyper-Reactive API Gateway (single JAR)"]
+        EDGE["Edge guards: CORS → Registry Guard → Rate Limiter → JWT"]
+        ROUTE["Route matcher (YAML predicates + auto-discovery)"]
+        LB["CustomLoadBalancer (least active connections)"]
+        REG[("In-memory registry + timing wheel")]
+        OBS["Observability: Micrometer · /summary · embedded dashboard"]
+    end
+    EDGE --> ROUTE --> LB
+    REG -. live instance list .-> LB
+    LB --> S1[order-service :8081]
+    LB --> S2[order-service :8082]
+    LB --> S3[inventory-service :8083]
+    S1 -. register + heartbeat .-> REG
+    S2 -. register + heartbeat .-> REG
+    EDGE -. counters .-> OBS
+    LB -. connection telemetry .-> OBS
+    OBS --> DASH[React dashboard]
+    OBS --> PROM[Prometheus / Grafana]
+```
+
+> **One-sentence summary:** requests survive five cheap edge guards before any routing work is done; services live in an in-memory map kept honest by a 1-second timing wheel; every routing decision reads *live* connection counts.
+
+📐 **Full Low-Level Design** — data structures, concurrency model, sequence diagrams, filter ordering, failure modes and extension guide: **[docs/SYSTEM_DESIGN.md](docs/SYSTEM_DESIGN.md)**
+
+
+
 ## Quickstart
 
 ### Option A — Docker (recommended)
